@@ -79,6 +79,9 @@ public class Utilisateur {
             this.emailVerifie = false;
         }
     }
+
+    public boolean isEmailVerifie() {
+        return Boolean.TRUE.equals(this.emailVerifie);
     }
 }
 
