@@ -157,9 +157,11 @@ public class AuthService {
 
         // Vérifier l'email avant d'authentifier
         if (!Boolean.TRUE.equals(utilisateur.isEmailVerifie())) {
-            throw BusinessException.forbidden(
+            throw new BusinessException(
                     "Votre adresse email n'est pas encore vérifiée. "
-                    + "Veuillez consulter votre boîte mail et entrer le code reçu.");
+                    + "Veuillez consulter votre boîte mail et entrer le code reçu.",
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    Map.of("email", utilisateur.getEmail()));
         }
 
         // Spring Security authentifie toujours via email (clé unique)

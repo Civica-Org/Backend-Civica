@@ -26,7 +26,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<Map<String, Object>> handleBusinessException(BusinessException ex) {
         log.warn("[BUSINESS ERROR] {} - {}", ex.getStatus(), ex.getMessage());
-        return buildResponse(ex.getStatus(), ex.getMessage());
+        Map<String, Object> body = buildResponseBody(ex.getStatus(), ex.getMessage());
+        if (ex.getData() != null) {
+            body.putAll(ex.getData());
+        }
+        return ResponseEntity.status(ex.getStatus()).body(body);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -52,12 +56,16 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<Map<String, Object>> buildResponse(HttpStatus status, String message) {
+        return ResponseEntity.status(status).body(buildResponseBody(status, message));
+    }
+
+    private Map<String, Object> buildResponseBody(HttpStatus status, String message) {
         Map<String, Object> body = new HashMap<>();
         body.put("timestamp", LocalDateTime.now().toString());
         body.put("status", status.value());
         body.put("error", status.getReasonPhrase());
         body.put("message", message);
-        return ResponseEntity.status(status).body(body);
+        return body;
     }
 }
 

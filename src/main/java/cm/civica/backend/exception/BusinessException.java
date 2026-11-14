@@ -9,14 +9,26 @@ import org.springframework.http.HttpStatus;
 public class BusinessException extends RuntimeException {
 
     private final HttpStatus status;
+    private final java.util.Map<String, Object> data;
 
     public BusinessException(String message, HttpStatus status) {
         super(message);
         this.status = status;
+        this.data = null;
+    }
+
+    public BusinessException(String message, HttpStatus status, java.util.Map<String, Object> data) {
+        super(message);
+        this.status = status;
+        this.data = data;
     }
 
     public HttpStatus getStatus() {
         return status;
+    }
+
+    public java.util.Map<String, Object> getData() {
+        return data;
     }
 
     /** 400 Bad Request */
