@@ -32,9 +32,14 @@ CREATE TABLE IF NOT EXISTS utilisateurs (
     telephone VARCHAR(50),
     role VARCHAR(50) NOT NULL, -- ROLE_CITOYEN, ROLE_AGENT, ROLE_RESPONSABLE, ROLE_SUPER_ADMIN
     service_id BIGINT REFERENCES services_administratifs(id) ON DELETE SET NULL,
+    email_verifie BOOLEAN DEFAULT FALSE,
+    code_verification VARCHAR(10),
+    code_verification_expiration TIMESTAMP WITH TIME ZONE,
     actif BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX IF NOT EXISTS idx_utilisateurs_telephone ON utilisateurs(telephone);
 
 -- 4. Table des Démarches administratives (Catalogue)
 CREATE TABLE IF NOT EXISTS demarches (
@@ -95,3 +100,4 @@ CREATE INDEX idx_dossiers_service_courant ON dossiers(service_courant_id);
 CREATE INDEX idx_dossiers_statut ON dossiers(statut);
 CREATE INDEX idx_pieces_dossier_id ON pieces_justificatives(dossier_id);
 CREATE INDEX idx_historique_dossier_id ON historique_dossiers(dossier_id);
+

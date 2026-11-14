@@ -1,0 +1,15 @@
+package cm.civica.backend.dto;
+
+import jakarta.validation.constraints.NotBlank;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class ResendCodeRequest {
+
+    @NotBlank(message = "L'adresse email ou le numéro de téléphone est obligatoire")
+    private String email;
+}

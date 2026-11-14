@@ -73,3 +73,4 @@ Une fois l'application lancée, la documentation interactive OpenAPI est consult
 ```bash
 mvn test
 ```
+
