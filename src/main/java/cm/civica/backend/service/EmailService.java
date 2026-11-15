@@ -2,6 +2,7 @@ package cm.civica.backend.service;
 
 import cm.civica.backend.model.Dossier;
 import cm.civica.backend.model.Utilisateur;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,8 +13,15 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Map;
 
 @Service
 public class EmailService {
@@ -29,6 +37,18 @@ public class EmailService {
     @Value("${civica.app.frontendUrl:http://localhost:5173}")
     private String frontendUrl;
 
+    @Value("${civica.mail.resend.apiKey:}")
+    private String resendApiKey;
+
+    @Value("${civica.mail.brevo.apiKey:}")
+    private String brevoApiKey;
+
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     /**
      * 1. Code OTP de vérification de l'adresse email lors de l'inscription.
      */
@@ -37,6 +57,7 @@ public class EmailService {
         if (user == null || user.getEmail() == null) return;
 
         String toEmail = user.getEmail();
+        log.info("🔑 [CODE OTP CIVICA] Destinataire: {} | Code de vérification: {}", toEmail, codeOtp);
         String subject = "CIVICA — Code de vérification de votre compte : " + codeOtp;
 
         String content = "<p>Bonjour <strong>" + user.getPrenom() + " " + user.getNom() + "</strong>,</p>"
@@ -169,8 +190,25 @@ public class EmailService {
     }
 
     private void sendHtmlEmail(String to, String subject, String preheader, String contentHtml, String ctaText, String ctaUrl) {
+        String htmlBody = buildHtmlTemplate(subject, preheader, contentHtml, ctaText, ctaUrl);
+
+        // 1. Essai prioritaire via Resend API (HTTPS port 443 - contourne le pare-feu SMTP de Render)
+        if (resendApiKey != null && !resendApiKey.isBlank()) {
+            if (sendViaResendHttp(to, subject, htmlBody)) {
+                return;
+            }
+        }
+
+        // 2. Essai via Brevo API (HTTPS port 443)
+        if (brevoApiKey != null && !brevoApiKey.isBlank()) {
+            if (sendViaBrevoHttp(to, subject, htmlBody)) {
+                return;
+            }
+        }
+
+        // 3. Fallback SMTP classique (fonctionne en local ou si ports SMTP ouverts)
         if (mailSender == null) {
-            log.warn("[EMAIL SERVICE] JavaMailSender n'est pas initialisé. Email non envoyé à {}", to);
+            log.warn("[EMAIL SERVICE] Aucun transport email disponible. Email non envoyé à {}", to);
             return;
         }
 
@@ -181,15 +219,74 @@ public class EmailService {
             helper.setFrom(fromEmail, "Plateforme CIVICA");
             helper.setTo(to);
             helper.setSubject(subject);
-
-            String htmlBody = buildHtmlTemplate(subject, preheader, contentHtml, ctaText, ctaUrl);
             helper.setText(htmlBody, true);
 
             mailSender.send(message);
-            log.info("[EMAIL SERVICE] Email envoyé avec succès à {} : {}", to, subject);
+            log.info("[EMAIL SERVICE] Email envoyé avec succès via SMTP à {} : {}", to, subject);
         } catch (Exception e) {
-            log.error("[EMAIL SERVICE] Erreur lors de l'envoi de l'email à {} : {}", to, e.getMessage());
+            log.warn("[EMAIL SERVICE] Échec de l'envoi SMTP à {} (timeout/pare-feu Render Free bloquant les ports SMTP 587/465). Erreur : {}", to, e.getMessage());
+            log.info("[EMAIL SERVICE] Astuce : Sur Render Free, activez une clé RESEND_API_KEY ou BREVO_API_KEY dans les variables d'environnement.");
         }
+    }
+
+    private boolean sendViaResendHttp(String to, String subject, String htmlBody) {
+        try {
+            Map<String, Object> payload = Map.of(
+                    "from", "CIVICA <onboarding@resend.dev>",
+                    "to", List.of(to),
+                    "subject", subject,
+                    "html", htmlBody
+            );
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://api.resend.com/emails"))
+                    .header("Authorization", "Bearer " + resendApiKey.trim())
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)))
+                    .timeout(Duration.ofSeconds(10))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                log.info("[EMAIL SERVICE] Email envoyé avec succès via Resend API (HTTPS) à {}", to);
+                return true;
+            } else {
+                log.warn("[EMAIL SERVICE] Erreur Resend API HTTP {} : {}", response.statusCode(), response.body());
+            }
+        } catch (Exception e) {
+            log.warn("[EMAIL SERVICE] Exception Resend HTTP : {}", e.getMessage());
+        }
+        return false;
+    }
+
+    private boolean sendViaBrevoHttp(String to, String subject, String htmlBody) {
+        try {
+            Map<String, Object> payload = Map.of(
+                    "sender", Map.of("name", "CIVICA", "email", fromEmail),
+                    "to", List.of(Map.of("email", to)),
+                    "subject", subject,
+                    "htmlContent", htmlBody
+            );
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://api.brevo.com/v3/smtp/email"))
+                    .header("api-key", brevoApiKey.trim())
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)))
+                    .timeout(Duration.ofSeconds(10))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                log.info("[EMAIL SERVICE] Email envoyé avec succès via Brevo API (HTTPS) à {}", to);
+                return true;
+            } else {
+                log.warn("[EMAIL SERVICE] Erreur Brevo API HTTP {} : {}", response.statusCode(), response.body());
+            }
+        } catch (Exception e) {
+            log.warn("[EMAIL SERVICE] Exception Brevo HTTP : {}", e.getMessage());
+        }
+        return false;
     }
 
     private String buildHtmlTemplate(String title, String preheader, String contentHtml, String ctaText, String ctaUrl) {

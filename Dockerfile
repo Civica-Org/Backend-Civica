@@ -27,3 +27,4 @@ EXPOSE 8080
 
 # Démarrage avec le profil prod
 ENTRYPOINT ["java", "-Dspring.profiles.active=prod", "-jar", "app.jar"]
+

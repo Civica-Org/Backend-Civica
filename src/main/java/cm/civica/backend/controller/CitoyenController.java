@@ -50,7 +50,7 @@ public class CitoyenController {
     }
 
     @Operation(summary = "Mes dossiers", description = "Retourne la liste de tous les dossiers déposés par le citoyen actuellement connecté.")
-    @GetMapping("/mes-dossiers")
+    @GetMapping({"", "/mes-dossiers"})
     public ResponseEntity<List<DossierResponseDto>> getMesDossiers() {
         return ResponseEntity.ok(citoyenService.getMesDossiers());
     }
