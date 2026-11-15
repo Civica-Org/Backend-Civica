@@ -14,3 +14,4 @@ public interface DossierObserver {
      */
     void onDossierEvent(DossierEvent event);
 }
+

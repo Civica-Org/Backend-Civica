@@ -57,3 +57,4 @@ public class ResponsableController {
         return ResponseEntity.ok(responsableService.validerHierarchique(numeroSuivi, request));
     }
 }
+

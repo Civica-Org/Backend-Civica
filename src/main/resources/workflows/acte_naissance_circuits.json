@@ -1,0 +1,164 @@
+{
+  "procedure": "ACTE_NAISSANCE_ETABLISSEMENT",
+  "codeDemarche": "DEM-ACTE-NAISS",
+  "intitule": "Établissement et délivrance d'Acte de Naissance (République du Cameroun)",
+  "referenceLegale": "Ordonnance n° 81-02 du 29 juin 1981 portant organisation de l'état civil au Cameroun (modifiée par la loi n° 2011/011 du 6 mai 2011)",
+  "version": "1.0.0",
+  "variants": [
+    {
+      "code": "NORMALE",
+      "libelle": "Circuit A — Déclaration normale dans le délai légal (<= 90 jours)",
+      "condition": "jours_depuis_naissance <= 90 and naissance_cameroun == true",
+      "fraisFcfa": 0,
+      "delaiIndicatifJours": 3,
+      "piecesRequises": [
+        {
+          "code": "ATTESTATION_ACCOUCHEMENT",
+          "intitule": "Attestation ou déclaration de naissance de la formation sanitaire (hôpital / maternité)",
+          "obligatoire": true
+        },
+        {
+          "code": "CNI_PARENTS",
+          "intitule": "Copies des Cartes Nationales d'Identité (CNI) des parents",
+          "obligatoire": true
+        },
+        {
+          "code": "CNI_TEMOINS",
+          "intitule": "Copies des CNI de deux témoins majeurs",
+          "obligatoire": true
+        }
+      ],
+      "workflow": [
+        {
+          "ordre": 1,
+          "codeEtape": "ETAT_CIVIL:RECEPTION",
+          "serviceCode": "SR-ETAT-CIVIL",
+          "organisationCode": "COMMUNE-YDE-1",
+          "roleRequis": "ROLE_AGENT",
+          "action": "Réception et contrôle formel du dossier de déclaration"
+        },
+        {
+          "ordre": 2,
+          "codeEtape": "ETAT_CIVIL:VERIFICATION",
+          "serviceCode": "SR-ETAT-CIVIL",
+          "organisationCode": "COMMUNE-YDE-1",
+          "roleRequis": "ROLE_AGENT",
+          "action": "Vérification des registres et audit de complétude des pièces"
+        },
+        {
+          "ordre": 3,
+          "codeEtape": "OFFICIER_EC:SIGNATURE",
+          "serviceCode": "SR-ETAT-CIVIL",
+          "organisationCode": "COMMUNE-YDE-1",
+          "roleRequis": "ROLE_RESPONSABLE",
+          "action": "Dressé et signature officielle de l'acte par l'Officier d'État Civil"
+        }
+      ]
+    },
+    {
+      "code": "TARDIVE",
+      "libelle": "Circuit B — Déclaration tardive sur réquisition du Procureur (91 à 365 jours)",
+      "condition": "90 < jours_depuis_naissance and jours_depuis_naissance <= 365",
+      "fraisFcfa": 1500,
+      "delaiIndicatifJours": 21,
+      "piecesRequises": [
+        {
+          "code": "REQUETE_PROCUREUR",
+          "intitule": "Requête timbrée adressée au Procureur de la République",
+          "obligatoire": true
+        },
+        {
+          "code": "CERTIFICAT_MEDICAL_NAISSANCE",
+          "intitule": "Certificat médical d'accouchement ou attestation du chef de quartier/village",
+          "obligatoire": true
+        },
+        {
+          "code": "CNI_PARENTS_TEMOINS",
+          "intitule": "Copies des CNI des parents et de deux témoins majeurs",
+          "obligatoire": true
+        }
+      ],
+      "workflow": [
+        {
+          "ordre": 1,
+          "codeEtape": "PARQUET:REQUISITION",
+          "serviceCode": "GREFFE-CASIER",
+          "organisationCode": "TPI-YDE",
+          "roleRequis": "ROLE_RESPONSABLE",
+          "action": "Examen de la requête et émission de la réquisition du Parquet"
+        },
+        {
+          "ordre": 2,
+          "codeEtape": "ETAT_CIVIL:VERIFICATION",
+          "serviceCode": "SR-ETAT-CIVIL",
+          "organisationCode": "COMMUNE-YDE-1",
+          "roleRequis": "ROLE_AGENT",
+          "action": "Réception après transfert inter-services et vérification de la réquisition"
+        },
+        {
+          "ordre": 3,
+          "codeEtape": "OFFICIER_EC:SIGNATURE",
+          "serviceCode": "SR-ETAT-CIVIL",
+          "organisationCode": "COMMUNE-YDE-1",
+          "roleRequis": "ROLE_RESPONSABLE",
+          "action": "Enregistrement sur registre et signature de l'acte par l'Officier d'État Civil"
+        }
+      ]
+    },
+    {
+      "code": "JUDICIAIRE",
+      "libelle": "Circuit C — Jugement supplétif d'acte de naissance (> 365 jours)",
+      "condition": "jours_depuis_naissance > 365",
+      "fraisFcfa": 5000,
+      "delaiIndicatifJours": 60,
+      "piecesRequises": [
+        {
+          "code": "REQUETE_PRESIDENT_TPI",
+          "intitule": "Requête timbrée adressée au Président du Tribunal de Première Instance",
+          "obligatoire": true
+        },
+        {
+          "code": "CERTIFICAT_NON_INSCRIPTION",
+          "intitule": "Certificat de non-inscription sur les registres délivré par le centre d'état civil",
+          "obligatoire": true
+        },
+        {
+          "code": "CERTIFICAT_AGE_APPARENT",
+          "intitule": "Certificat médical d'âge apparent délivré par un médecin assermenté",
+          "obligatoire": true
+        },
+        {
+          "code": "CNI_REQUERANT_TEMOINS",
+          "intitule": "Pièces d'identité du requérant et de deux témoins majeurs",
+          "obligatoire": true
+        }
+      ],
+      "workflow": [
+        {
+          "ordre": 1,
+          "codeEtape": "TRIBUNAL:JUGEMENT_DECLARATIF",
+          "serviceCode": "GREFFE-CASIER",
+          "organisationCode": "TPI-YDE",
+          "roleRequis": "ROLE_RESPONSABLE",
+          "action": "Enquête, audience et prononcé du jugement supplétif d'acte de naissance"
+        },
+        {
+          "ordre": 2,
+          "codeEtape": "ETAT_CIVIL:TRANSCRIPTION",
+          "serviceCode": "SR-ETAT-CIVIL",
+          "organisationCode": "COMMUNE-YDE-1",
+          "roleRequis": "ROLE_AGENT",
+          "action": "Transcription du dispositif du jugement supplétif sur les registres d'état civil"
+        },
+        {
+          "ordre": 3,
+          "codeEtape": "OFFICIER_EC:SIGNATURE",
+          "serviceCode": "SR-ETAT-CIVIL",
+          "organisationCode": "COMMUNE-YDE-1",
+          "roleRequis": "ROLE_RESPONSABLE",
+          "action": "Signature finale et mise à disposition de l'acte de naissance transcrit"
+        }
+      ]
+    }
+  ]
+}

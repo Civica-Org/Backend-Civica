@@ -111,6 +111,7 @@ public class WebSecurityConfig {
                                 "/webjars/**"
                         ).permitAll()
                         .requestMatchers("/uploads/**").permitAll()
+                        .requestMatchers("/api/admin/**").hasAuthority("ROLE_SUPER_ADMIN")
                         .requestMatchers("/api/agent/**").hasAnyAuthority("ROLE_AGENT", "ROLE_RESPONSABLE", "ROLE_SUPER_ADMIN")
                         .requestMatchers("/api/responsable/**").hasAnyAuthority("ROLE_RESPONSABLE", "ROLE_SUPER_ADMIN")
                         .requestMatchers("/api/citoyen/**").authenticated()

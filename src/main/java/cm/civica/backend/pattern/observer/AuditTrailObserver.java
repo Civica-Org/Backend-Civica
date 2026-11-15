@@ -38,3 +38,4 @@ public class AuditTrailObserver implements DossierObserver {
         log.debug("[AUDIT OBSERVER] Entrée d'historique persistée avec succès pour {}", event.getDossier().getNumeroSuivi());
     }
 }
+

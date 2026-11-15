@@ -45,3 +45,4 @@ public class DashboardResponsableDto {
     // Liste des dossiers urgents ou en souffrance
     private List<DossierResponseDto> dossiersEnSouffrance;
 }
+

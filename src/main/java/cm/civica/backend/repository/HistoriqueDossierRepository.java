@@ -13,4 +13,5 @@ public interface HistoriqueDossierRepository extends JpaRepository<HistoriqueDos
     List<HistoriqueDossier> findByDossierNumeroSuiviOrderByTimestampDesc(String numeroSuivi);
     long countByAgentId(Long agentId);
     long countByAgentIdAndNouveauStatut(Long agentId, StatutDossier statut);
+    List<HistoriqueDossier> findTop100ByOrderByTimestampDesc();
 }

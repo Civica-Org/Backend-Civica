@@ -12,3 +12,4 @@ public interface DossierSubject {
 
     void notifyObservers(DossierEvent event);
 }
+

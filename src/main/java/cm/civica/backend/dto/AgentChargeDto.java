@@ -22,3 +22,4 @@ public class AgentChargeDto {
     private long dossiersTraitesTotal;
     private boolean actif;
 }
+

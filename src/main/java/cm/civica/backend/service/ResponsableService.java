@@ -212,9 +212,14 @@ public class ResponsableService {
             if (!res.isValide()) {
                 throw BusinessException.badRequest("Validation impossible : " + res.getMotifRejet());
             }
+            if (dossier.getStatut() == StatutDossier.SOUMIS || dossier.getStatut() == StatutDossier.TRANSFERE) {
+                stateMachine.prendreEnCharge(dossier);
+            }
             stateMachine.valider(dossier);
         } else if (request.getStatut() == StatutDossier.REJETE) {
             stateMachine.rejeter(dossier, request.getMotifRejet());
+        } else {
+            throw BusinessException.badRequest("Statut hiérarchique non supporté : " + request.getStatut());
         }
 
         dossier.setUpdatedAt(Instant.now());

@@ -65,3 +65,4 @@ public class DossierEventPublisher implements DossierSubject {
         }
     }
 }
+

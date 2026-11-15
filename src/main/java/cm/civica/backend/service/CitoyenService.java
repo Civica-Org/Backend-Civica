@@ -209,6 +209,7 @@ public class CitoyenService {
 
         return HistoriqueDossierDto.builder()
                 .id(h.getId())
+                .numeroSuivi(h.getDossier() != null ? h.getDossier().getNumeroSuivi() : null)
                 .agentNom(agentNom)
                 .serviceSourceNom(srcNom)
                 .serviceCibleNom(cibleNom)

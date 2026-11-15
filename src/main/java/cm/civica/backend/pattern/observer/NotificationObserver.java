@@ -44,3 +44,4 @@ public class NotificationObserver implements DossierObserver {
         log.debug("[NOTIFICATION OBSERVER] Traitement notification terminé pour {}", dossier.getNumeroSuivi());
     }
 }
+

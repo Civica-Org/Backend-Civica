@@ -20,3 +20,4 @@ public class ReassignationDossierRequest {
 
     private String noteResponsable;
 }
+

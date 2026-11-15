@@ -14,6 +14,7 @@ import java.time.Instant;
 @Builder
 public class HistoriqueDossierDto {
     private Long id;
+    private String numeroSuivi;
     private String agentNom;
     private String serviceSourceNom;
     private String serviceCibleNom;
