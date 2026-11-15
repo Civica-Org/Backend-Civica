@@ -5,6 +5,8 @@ import cm.civica.backend.enums.StatutDossier;
 import cm.civica.backend.enums.StatutPiece;
 import cm.civica.backend.exception.BusinessException;
 import cm.civica.backend.model.*;
+import cm.civica.backend.pattern.observer.DossierEvent;
+import cm.civica.backend.pattern.observer.DossierSubject;
 import cm.civica.backend.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -44,6 +46,10 @@ public class CitoyenService {
     @Autowired
     private EmailService emailService;
 
+    // Pattern GoF : Observer
+    @Autowired
+    private DossierSubject dossierSubject;
+
     @Transactional
     public DossierResponseDto deposerDossier(DepotDossierRequest request) {
         Utilisateur citoyen = authService.getCurrentUser();
@@ -78,20 +84,13 @@ public class CitoyenService {
 
         Dossier savedDossier = dossierRepository.save(dossier);
 
-        // Audit historique initial
-        HistoriqueDossier historique = HistoriqueDossier.builder()
-                .dossier(savedDossier)
-                .serviceCible(serviceCourant)
-                .nouveauStatut(StatutDossier.SOUMIS)
-                .actionEffectuee("DEPOT_DOSSIER")
-                .commentaire("Dépôt initial du dossier par le citoyen " + citoyen.getPrenom() + " " + citoyen.getNom())
-                .timestamp(Instant.now())
-                .build();
-
-        historiqueRepository.save(historique);
-
-        // Envoi asynchrone du mail de confirmation avec le numéro de suivi
-        emailService.sendConfirmationDepot(savedDossier);
+        // Notification découplée via le Pattern Observer (Audit, Email de confirmation, Télémétrie)
+        dossierSubject.notifyObservers(DossierEvent.of(
+                savedDossier, null, StatutDossier.SOUMIS,
+                "DEPOT_DOSSIER",
+                "Dépôt initial du dossier par le citoyen " + citoyen.getPrenom() + " " + citoyen.getNom(),
+                citoyen, serviceCourant
+        ));
 
         return toDto(savedDossier);
     }

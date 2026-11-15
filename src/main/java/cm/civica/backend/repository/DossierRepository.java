@@ -25,5 +25,9 @@ public interface DossierRepository extends JpaRepository<Dossier, Long> {
 
     long countByStatut(StatutDossier statut);
 
+    long countByServiceCourantId(Long serviceId);
+
+    long countByServiceCourantIdAndStatut(Long serviceId, StatutDossier statut);
+
     long countByNumeroSuiviStartingWith(String prefix);
 }

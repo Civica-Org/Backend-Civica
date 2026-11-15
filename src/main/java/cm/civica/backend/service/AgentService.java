@@ -13,6 +13,8 @@ import cm.civica.backend.model.Utilisateur;
 import cm.civica.backend.pattern.adapter.LlmAuditeurService;
 import cm.civica.backend.pattern.chain.CircuitValidationDossier;
 import cm.civica.backend.pattern.chain.ResultatValidation;
+import cm.civica.backend.pattern.observer.DossierEvent;
+import cm.civica.backend.pattern.observer.DossierSubject;
 import cm.civica.backend.pattern.state.DossierStateMachine;
 import cm.civica.backend.repository.DossierRepository;
 import cm.civica.backend.repository.HistoriqueDossierRepository;
@@ -58,6 +60,10 @@ public class AgentService {
     @Autowired
     private LlmAuditeurService llmAuditeurService;
 
+    // Pattern GoF : Observer
+    @Autowired
+    private DossierSubject dossierSubject;
+
     @Transactional(readOnly = true)
     public List<DossierResponseDto> getDossiersAInstructionner(StatutDossier statut) {
         Utilisateur agent = authService.getCurrentUser();
@@ -94,21 +100,13 @@ public class AgentService {
         stateMachine.prendreEnCharge(dossier);
         Dossier saved = dossierRepository.save(dossier);
 
-        HistoriqueDossier historique = HistoriqueDossier.builder()
-                .dossier(saved)
-                .agent(agent)
-                .serviceSource(dossier.getServiceCourant())
-                .statutPrecedent(ancienStatut)
-                .nouveauStatut(StatutDossier.EN_VERIFICATION)
-                .actionEffectuee("PRISE_EN_CHARGE")
-                .commentaire("Prise en charge pour instruction par l'agent " + agent.getPrenom() + " " + agent.getNom())
-                .timestamp(Instant.now())
-                .build();
-
-        historiqueRepository.save(historique);
-
-        // Notification asynchrone au citoyen
-        emailService.sendNotificationChangementStatut(saved, "Votre dossier a été pris en charge pour instruction par un agent.");
+        // Notification découplée via le Pattern Observer (audit, email, télémétrie)
+        dossierSubject.notifyObservers(DossierEvent.of(
+                saved, ancienStatut, StatutDossier.EN_VERIFICATION,
+                "PRISE_EN_CHARGE",
+                "Prise en charge pour instruction par l'agent " + agent.getPrenom() + " " + agent.getNom(),
+                agent, dossier.getServiceCourant()
+        ));
 
         return citoyenService.toDto(saved);
     }
@@ -134,24 +132,18 @@ public class AgentService {
             dossier.setStatut(request.getStatut());
         }
 
+        dossier.setUpdatedAt(Instant.now());
         Dossier saved = dossierRepository.save(dossier);
 
-        HistoriqueDossier historique = HistoriqueDossier.builder()
-                .dossier(saved)
-                .agent(agent)
-                .serviceSource(dossier.getServiceCourant())
-                .statutPrecedent(ancienStatut)
-                .nouveauStatut(request.getStatut())
-                .actionEffectuee(request.getStatut() == StatutDossier.VALIDE ? "VALIDATION" : "REJET")
-                .commentaire(request.getCommentaire() != null ? request.getCommentaire() : request.getMotifRejet())
-                .timestamp(Instant.now())
-                .build();
-
-        historiqueRepository.save(historique);
-
-        // Notification asynchrone au citoyen (Validation ou Rejet avec motif)
         String motifOuCom = request.getCommentaire() != null ? request.getCommentaire() : request.getMotifRejet();
-        emailService.sendNotificationChangementStatut(saved, motifOuCom);
+
+        // Notification découplée via le Pattern Observer (audit, email, métriques)
+        dossierSubject.notifyObservers(DossierEvent.of(
+                saved, ancienStatut, request.getStatut(),
+                request.getStatut() == StatutDossier.VALIDE ? "VALIDATION" : "REJET",
+                motifOuCom,
+                agent, dossier.getServiceCourant()
+        ));
 
         return citoyenService.toDto(saved);
     }
@@ -172,23 +164,16 @@ public class AgentService {
         stateMachine.transferer(dossier, cible);
         Dossier saved = dossierRepository.save(dossier);
 
-        HistoriqueDossier historique = HistoriqueDossier.builder()
-                .dossier(saved)
-                .agent(agent)
-                .serviceSource(source)
-                .serviceCible(cible)
-                .statutPrecedent(ancienStatut)
-                .nouveauStatut(StatutDossier.TRANSFERE)
-                .actionEffectuee("TRANSFERT_INTER_SERVICE")
-                .commentaire(request.getCommentaire() != null ? request.getCommentaire()
-                        : "Transfert vers " + cible.getNom())
-                .timestamp(Instant.now())
-                .build();
+        String commentaire = request.getCommentaire() != null ? request.getCommentaire()
+                : "Transfert vers " + cible.getNom();
 
-        historiqueRepository.save(historique);
-
-        // Notification asynchrone au citoyen
-        emailService.sendNotificationChangementStatut(saved, "Dossier transféré vers le service : " + cible.getNom());
+        // Notification découplée via le Pattern Observer (audit, email, traçabilité)
+        dossierSubject.notifyObservers(DossierEvent.of(
+                saved, ancienStatut, StatutDossier.TRANSFERE,
+                "TRANSFERT_INTER_SERVICE",
+                commentaire,
+                agent, cible
+        ));
 
         return citoyenService.toDto(saved);
     }
