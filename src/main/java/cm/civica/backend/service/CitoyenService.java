@@ -1,6 +1,8 @@
 package cm.civica.backend.service;
 
 import cm.civica.backend.dto.*;
+import cm.civica.backend.dto.finance.BaremePaiementDto;
+import cm.civica.backend.dto.finance.PaiementDto;
 import cm.civica.backend.enums.StatutDossier;
 import cm.civica.backend.enums.StatutPiece;
 import cm.civica.backend.exception.BusinessException;
@@ -13,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -50,6 +53,9 @@ public class CitoyenService {
     @Autowired
     private DossierSubject dossierSubject;
 
+    @Autowired
+    private FinanceService financeService;
+
     @Transactional
     public DossierResponseDto deposerDossier(DepotDossierRequest request) {
         Utilisateur citoyen = authService.getCurrentUser();
@@ -61,12 +67,29 @@ public class CitoyenService {
         if (request.getServiceId() != null) {
             serviceCourant = serviceRepository.findById(request.getServiceId())
                     .orElseThrow(() -> BusinessException.notFound("Service administratif introuvable"));
-        } else {
-            // Service par défaut si non spécifié
-            List<ServiceAdministratif> services = serviceRepository.findByActifTrue();
-            if (!services.isEmpty()) {
-                serviceCourant = services.get(0);
+            if (!Boolean.TRUE.equals(serviceCourant.getActif())) {
+                throw BusinessException.badRequest("Ce service administratif est actuellement inactif.");
             }
+        } else {
+            // Routage compétent aligné sur le barème financier de la démarche
+            serviceCourant = financeService.resolveDefaultServiceForDemarche(demarche.getCode());
+        }
+
+        // Vérification obligatoire du paiement préalable des frais de service avant la soumission
+        BaremePaiementDto bareme = financeService.getBaremeForDemarche(
+                demarche.getCode(),
+                request.getVarianteCircuit(),
+                serviceCourant != null ? serviceCourant.getId() : null
+        );
+        Paiement prePaiement = null;
+        if (!bareme.isGratuit() && bareme.getMontantTotal().compareTo(BigDecimal.ZERO) > 0) {
+            prePaiement = financeService.validatePrePaymentForSubmission(
+                    citoyen,
+                    request.getPaiementReference(),
+                    demarche.getCode(),
+                    bareme,
+                    serviceCourant
+            );
         }
 
         String numeroSuivi = genererNumeroSuiviUnique();
@@ -92,7 +115,12 @@ public class CitoyenService {
                 citoyen, serviceCourant
         ));
 
-        return toDto(savedDossier);
+        if (prePaiement != null) {
+            financeService.linkPrePaymentToDossier(prePaiement, savedDossier);
+            return toDto(savedDossier, financeService.toPaiementDto(prePaiement));
+        }
+
+        return toDto(savedDossier, null);
     }
 
     @Transactional
@@ -154,6 +182,13 @@ public class CitoyenService {
     }
 
     public DossierResponseDto toDto(Dossier dossier) {
+        PaiementDto paiementConfirme = (financeService != null && dossier.getId() != null)
+                ? financeService.getConfirmedPaiementForDossier(dossier.getId()).orElse(null)
+                : null;
+        return toDto(dossier, paiementConfirme);
+    }
+
+    private DossierResponseDto toDto(Dossier dossier, PaiementDto paiementConfirme) {
         List<PieceJustificativeDto> piecesDto = pieceRepository.findByDossierId(dossier.getId()).stream()
                 .map(this::toPieceDto)
                 .collect(Collectors.toList());
@@ -183,6 +218,8 @@ public class CitoyenService {
                 .motifRejet(dossier.getMotifRejet())
                 .createdAt(dossier.getCreatedAt())
                 .updatedAt(dossier.getUpdatedAt())
+                .paye(paiementConfirme != null && "CONFIRME".equals(paiementConfirme.getStatut()))
+                .paiementConfirme(paiementConfirme)
                 .pieces(piecesDto)
                 .historiques(historiquesDto)
                 .build();

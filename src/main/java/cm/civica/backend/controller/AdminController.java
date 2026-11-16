@@ -3,6 +3,7 @@ package cm.civica.backend.controller;
 import cm.civica.backend.dto.*;
 import cm.civica.backend.model.Demarche;
 import cm.civica.backend.model.Organisation;
+import cm.civica.backend.model.OrganisationType;
 import cm.civica.backend.service.AdminService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,7 +17,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin")
-@Tag(name = "6. Administration Plateforme", description = "Gestion globale du paramétrage CIVICA (utilisateurs, organisations, services, démarches, audit système)")
+@Tag(name = "6. Administration Plateforme", description = "Gestion globale du paramétrage institutionnel CIVICA (organisations, services, démarches, utilisateurs)")
 @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
 public class AdminController {
 
@@ -33,6 +34,15 @@ public class AdminController {
     @GetMapping("/users")
     public ResponseEntity<List<UtilisateurAdminDto>> getAllUsers() {
         return ResponseEntity.ok(adminService.getAllUsers());
+    }
+
+    @Operation(
+            summary = "Rechercher un compte CIVICA par email",
+            description = "Permet à l'administrateur de vérifier l'existence d'un compte CIVICA et son identité avant de le nommer responsable lors de la création d'une organisation."
+    )
+    @GetMapping("/users/lookup")
+    public ResponseEntity<UtilisateurAdminDto> lookupUserByEmail(@RequestParam("email") String email) {
+        return ResponseEntity.ok(adminService.lookupUserByEmail(email));
     }
 
     @Operation(summary = "Créer un utilisateur administratif ou citoyen")
@@ -67,10 +77,59 @@ public class AdminController {
         return ResponseEntity.ok(adminService.createOrganisation(request));
     }
 
+    @Operation(summary = "Modifier une organisation administrative")
+    @PutMapping("/organisations/{id}")
+    public ResponseEntity<Organisation> updateOrganisation(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateOrganisationRequest request) {
+        return ResponseEntity.ok(adminService.updateOrganisation(id, request));
+    }
+
+    @Operation(summary = "Supprimer une organisation administrative")
+    @DeleteMapping("/organisations/{id}")
+    public ResponseEntity<Void> deleteOrganisation(@PathVariable Long id) {
+        adminService.deleteOrganisation(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @Operation(summary = "Activer ou désactiver une organisation")
     @PutMapping("/organisations/{id}/toggle-status")
     public ResponseEntity<Organisation> toggleOrganisationStatus(@PathVariable Long id) {
         return ResponseEntity.ok(adminService.toggleOrganisationStatus(id));
+    }
+
+    @Operation(summary = "Lister tous les types d'organisations")
+    @GetMapping("/organisation-types")
+    public ResponseEntity<List<OrganisationType>> getAllOrganisationTypes() {
+        return ResponseEntity.ok(adminService.getAllOrganisationTypes());
+    }
+
+    @Operation(summary = "Créer un nouveau type d'organisation")
+    @PostMapping("/organisation-types")
+    public ResponseEntity<OrganisationType> createOrganisationType(
+            @Valid @RequestBody CreateOrganisationTypeRequest request) {
+        return ResponseEntity.ok(adminService.createOrganisationType(request));
+    }
+
+    @Operation(summary = "Modifier un type d'organisation")
+    @PutMapping("/organisation-types/{id}")
+    public ResponseEntity<OrganisationType> updateOrganisationType(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateOrganisationTypeRequest request) {
+        return ResponseEntity.ok(adminService.updateOrganisationType(id, request));
+    }
+
+    @Operation(summary = "Activer ou désactiver un type d'organisation")
+    @PutMapping("/organisation-types/{id}/toggle-status")
+    public ResponseEntity<OrganisationType> toggleOrganisationTypeStatus(@PathVariable Long id) {
+        return ResponseEntity.ok(adminService.toggleOrganisationTypeStatus(id));
+    }
+
+    @Operation(summary = "Supprimer un type d'organisation")
+    @DeleteMapping("/organisation-types/{id}")
+    public ResponseEntity<Void> deleteOrganisationType(@PathVariable Long id) {
+        adminService.deleteOrganisationType(id);
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "Lister tous les services administratifs")
@@ -83,6 +142,21 @@ public class AdminController {
     @PostMapping("/services")
     public ResponseEntity<ServiceAdminDto> createService(@Valid @RequestBody CreateServiceRequest request) {
         return ResponseEntity.ok(adminService.createService(request));
+    }
+
+    @Operation(summary = "Modifier un service administratif")
+    @PutMapping("/services/{id}")
+    public ResponseEntity<ServiceAdminDto> updateService(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateServiceRequest request) {
+        return ResponseEntity.ok(adminService.updateService(id, request));
+    }
+
+    @Operation(summary = "Supprimer un service administratif")
+    @DeleteMapping("/services/{id}")
+    public ResponseEntity<Void> deleteService(@PathVariable Long id) {
+        adminService.deleteService(id);
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "Activer ou désactiver un service administratif")
@@ -103,15 +177,24 @@ public class AdminController {
         return ResponseEntity.ok(adminService.createDemarche(request));
     }
 
+    @Operation(summary = "Modifier une démarche du catalogue")
+    @PutMapping("/demarches/{id}")
+    public ResponseEntity<Demarche> updateDemarche(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateDemarcheRequest request) {
+        return ResponseEntity.ok(adminService.updateDemarche(id, request));
+    }
+
+    @Operation(summary = "Supprimer une démarche du catalogue")
+    @DeleteMapping("/demarches/{id}")
+    public ResponseEntity<Void> deleteDemarche(@PathVariable Long id) {
+        adminService.deleteDemarche(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @Operation(summary = "Activer ou désactiver une démarche")
     @PutMapping("/demarches/{id}/toggle-status")
     public ResponseEntity<Demarche> toggleDemarcheStatus(@PathVariable Long id) {
         return ResponseEntity.ok(adminService.toggleDemarcheStatus(id));
-    }
-
-    @Operation(summary = "Consulter le journal d'audit système complet")
-    @GetMapping("/audit-logs")
-    public ResponseEntity<List<HistoriqueDossierDto>> getRecentAuditLogs() {
-        return ResponseEntity.ok(adminService.getRecentAuditLogs());
     }
 }

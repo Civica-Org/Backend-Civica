@@ -2,6 +2,7 @@ package cm.civica.backend.exception;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -46,6 +47,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException ex) {
         log.warn("[ACCESS DENIED] {}", ex.getMessage());
         return buildResponse(HttpStatus.FORBIDDEN, "Accès refusé : permissions insuffisantes.");
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        log.warn("[DATA INTEGRITY CONFLICT] {}", ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage());
+        return buildResponse(HttpStatus.CONFLICT,
+                "Opération impossible : cet élément est encore lié à d'autres données ou viole une contrainte d'unicité.");
     }
 
     @ExceptionHandler(Exception.class)

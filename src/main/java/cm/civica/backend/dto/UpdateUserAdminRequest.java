@@ -13,5 +13,6 @@ import lombok.NoArgsConstructor;
 public class UpdateUserAdminRequest {
     private Role role;
     private Long serviceId;
+    private Long organisationId;
     private Boolean actif;
 }

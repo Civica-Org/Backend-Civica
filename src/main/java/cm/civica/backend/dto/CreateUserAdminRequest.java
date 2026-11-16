@@ -33,4 +33,6 @@ public class CreateUserAdminRequest {
     private Role role;
 
     private Long serviceId;
+
+    private Long organisationId;
 }

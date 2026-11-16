@@ -18,6 +18,8 @@ public interface DossierRepository extends JpaRepository<Dossier, Long> {
     List<Dossier> findByCitoyenIdOrderByCreatedAtDesc(Long citoyenId);
     List<Dossier> findByServiceCourantId(Long serviceId);
     List<Dossier> findByServiceCourantIdAndStatut(Long serviceId, StatutDossier statut);
+    List<Dossier> findByServiceCourantOrganisationId(Long organisationId);
+    List<Dossier> findByServiceCourantOrganisationIdAndStatut(Long organisationId, StatutDossier statut);
     List<Dossier> findByStatut(StatutDossier statut);
 
     @Query("SELECT d FROM Dossier d LEFT JOIN FETCH d.pieces LEFT JOIN FETCH d.demarche WHERE d.numeroSuivi = :numeroSuivi")
@@ -26,6 +28,8 @@ public interface DossierRepository extends JpaRepository<Dossier, Long> {
     long countByStatut(StatutDossier statut);
 
     long countByServiceCourantId(Long serviceId);
+
+    long countByDemarcheId(Long demarcheId);
 
     long countByServiceCourantIdAndStatut(Long serviceId, StatutDossier statut);
 

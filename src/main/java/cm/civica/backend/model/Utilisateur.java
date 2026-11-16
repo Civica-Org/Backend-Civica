@@ -47,6 +47,18 @@ public class Utilisateur {
     @JsonIgnoreProperties({"organisation", "hibernateLazyInitializer", "handler"})
     private ServiceAdministratif service;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "organisation_id")
+    @JsonIgnoreProperties({"services", "hibernateLazyInitializer", "handler"})
+    private Organisation organisation;
+
+    public Organisation resolveEffectiveOrganisation() {
+        if (this.organisation != null) {
+            return this.organisation;
+        }
+        return this.service != null ? this.service.getOrganisation() : null;
+    }
+
     @Builder.Default
     @Column(name = "email_verifie", nullable = false)
     private Boolean emailVerifie = false;

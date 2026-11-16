@@ -19,18 +19,19 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/agent/dossiers")
-@Tag(name = "4. Espace Agent & Responsable", description = "Instruction des dossiers administratifs, vérification des pièces, décisions, transferts et assistance IA (LLM)")
-@PreAuthorize("hasAnyAuthority('ROLE_AGENT', 'ROLE_RESPONSABLE', 'ROLE_SUPER_ADMIN')")
+@Tag(name = "4. Espace Agent & Supervision", description = "Instruction des dossiers administratifs, vérification des pièces, décisions, transferts et assistance IA (LLM)")
+@PreAuthorize("hasAnyAuthority('ROLE_AGENT', 'ROLE_SOUS_RESPONSABLE', 'ROLE_RESPONSABLE')")
 public class AgentController {
 
     @Autowired
     private AgentService agentService;
 
-    @Operation(summary = "Lister les dossiers à instruire", description = "Retourne la liste des dossiers assignés au service de l'agent. Filtrable par statut.")
+    @Operation(summary = "Lister les dossiers à instruire", description = "Retourne la liste des dossiers assignés au service (ou à l'organisation pour le Responsable). Filtrable par statut et service.")
     @GetMapping
     public ResponseEntity<List<DossierResponseDto>> getDossiersAInstructionner(
-            @RequestParam(required = false) StatutDossier statut) {
-        return ResponseEntity.ok(agentService.getDossiersAInstructionner(statut));
+            @RequestParam(required = false) StatutDossier statut,
+            @RequestParam(required = false) Long serviceId) {
+        return ResponseEntity.ok(agentService.getDossiersAInstructionner(statut, serviceId));
     }
 
     @Operation(summary = "Prendre en charge un dossier", description = "Fait passer le dossier au statut EN_VERIFICATION (Pattern State) et enregistre l'agent instructeur dans l'audit.")

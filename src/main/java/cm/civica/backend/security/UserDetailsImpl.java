@@ -1,5 +1,6 @@
 package cm.civica.backend.security;
 
+import cm.civica.backend.model.Organisation;
 import cm.civica.backend.model.Utilisateur;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Getter;
@@ -22,6 +23,8 @@ public class UserDetailsImpl implements UserDetails {
     private final String role;
     private final Long serviceId;
     private final String serviceNom;
+    private final Long organisationId;
+    private final String organisationNom;
     private final boolean emailVerifie;
 
     @JsonIgnore
@@ -30,7 +33,9 @@ public class UserDetailsImpl implements UserDetails {
     private final Collection<? extends GrantedAuthority> authorities;
 
     public UserDetailsImpl(Long id, String email, String nom, String prenom, String telephone,
-                           String role, Long serviceId, String serviceNom, boolean emailVerifie, String password,
+                           String role, Long serviceId, String serviceNom,
+                           Long organisationId, String organisationNom,
+                           boolean emailVerifie, String password,
                            Collection<? extends GrantedAuthority> authorities) {
         this.id = id;
         this.email = email;
@@ -40,6 +45,8 @@ public class UserDetailsImpl implements UserDetails {
         this.role = role;
         this.serviceId = serviceId;
         this.serviceNom = serviceNom;
+        this.organisationId = organisationId;
+        this.organisationNom = organisationNom;
         this.emailVerifie = emailVerifie;
         this.password = password;
         this.authorities = authorities;
@@ -49,6 +56,9 @@ public class UserDetailsImpl implements UserDetails {
         GrantedAuthority authority = new SimpleGrantedAuthority(utilisateur.getRole().name());
         Long sId = utilisateur.getService() != null ? utilisateur.getService().getId() : null;
         String sNom = utilisateur.getService() != null ? utilisateur.getService().getNom() : null;
+        Organisation org = utilisateur.resolveEffectiveOrganisation();
+        Long oId = org != null ? org.getId() : null;
+        String oNom = org != null ? org.getNom() : null;
 
         return new UserDetailsImpl(
                 utilisateur.getId(),
@@ -59,6 +69,8 @@ public class UserDetailsImpl implements UserDetails {
                 utilisateur.getRole().name(),
                 sId,
                 sNom,
+                oId,
+                oNom,
                 Boolean.TRUE.equals(utilisateur.getEmailVerifie()),
                 utilisateur.getMotDePasseHash(),
                 Collections.singletonList(authority)

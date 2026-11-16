@@ -5,6 +5,7 @@ import cm.civica.backend.enums.Role;
 import cm.civica.backend.enums.StatutDossier;
 import cm.civica.backend.exception.BusinessException;
 import cm.civica.backend.model.Dossier;
+import cm.civica.backend.model.Organisation;
 import cm.civica.backend.model.ServiceAdministratif;
 import cm.civica.backend.model.Utilisateur;
 import cm.civica.backend.pattern.chain.CircuitValidationDossier;
@@ -14,6 +15,7 @@ import cm.civica.backend.pattern.observer.DossierSubject;
 import cm.civica.backend.pattern.state.DossierStateMachine;
 import cm.civica.backend.repository.DossierRepository;
 import cm.civica.backend.repository.HistoriqueDossierRepository;
+import cm.civica.backend.repository.ServiceAdministratifRepository;
 import cm.civica.backend.repository.UtilisateurRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,9 +29,9 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Service dédié au rôle Responsable (Tâche B7).
- * Fournit les fonctionnalités de supervision, d'analyse des KPIs,
- * de réassignation d'instructeur et de validation hiérarchique.
+ * Service dédié aux rôles de supervision :
+ * - ROLE_RESPONSABLE (Organisation -> tous les services de son organisation + équipe)
+ * - ROLE_SOUS_RESPONSABLE (Service -> son service et ses agents)
  */
 @Service
 public class ResponsableService {
@@ -41,6 +43,9 @@ public class ResponsableService {
 
     @Autowired
     private UtilisateurRepository utilisateurRepository;
+
+    @Autowired
+    private ServiceAdministratifRepository serviceRepository;
 
     @Autowired
     private HistoriqueDossierRepository historiqueRepository;
@@ -60,19 +65,43 @@ public class ResponsableService {
     @Autowired
     private DossierSubject dossierSubject;
 
-    /**
-     * Calcule l'ensemble des indicateurs de supervision pour le tableau de bord du Responsable.
-     */
+    @Autowired
+    private PersonnelHierarchyHelper personnelHierarchyHelper;
+
     @Transactional(readOnly = true)
     public DashboardResponsableDto getDashboard() {
-        Utilisateur responsable = authService.getCurrentUser();
-        ServiceAdministratif service = responsable.getService();
+        return getDashboard(null);
+    }
 
-        List<Dossier> dossiers;
-        if (responsable.getRole() == Role.ROLE_SUPER_ADMIN || service == null) {
-            dossiers = dossierRepository.findAll();
+    /**
+     * Calcule l'ensemble des indicateurs de supervision pour le tableau de bord du Responsable ou Sous-Responsable.
+     */
+    @Transactional(readOnly = true)
+    public DashboardResponsableDto getDashboard(Long requestedServiceId) {
+        Utilisateur responsable = authService.getCurrentUser();
+        List<Dossier> dossiers = personnelHierarchyHelper.findScopedDossiers(responsable, null, requestedServiceId);
+
+        String codeScope;
+        String nomScope;
+        String nomOrganisation;
+
+        if (requestedServiceId != null) {
+            ServiceAdministratif svc = personnelHierarchyHelper.requireService(
+                    requestedServiceId, "Service administratif introuvable avec l'ID : " + requestedServiceId);
+            codeScope = svc.getCode();
+            nomScope = svc.getNom();
+            nomOrganisation = svc.getOrganisation() != null ? svc.getOrganisation().getNom() : "République du Cameroun";
+        } else if (responsable.getRole() == Role.ROLE_RESPONSABLE) {
+            Organisation org = personnelHierarchyHelper.requireUserOrganisation(responsable);
+            int nbServices = serviceRepository.findByOrganisationId(org.getId()).size();
+            codeScope = org.getCode();
+            nomScope = nbServices == 0 ? "Aucun service configuré" : "Tous les services (" + nbServices + ")";
+            nomOrganisation = org.getNom();
         } else {
-            dossiers = dossierRepository.findByServiceCourantId(service.getId());
+            ServiceAdministratif svc = personnelHierarchyHelper.requireUserService(responsable);
+            codeScope = svc.getCode();
+            nomScope = svc.getNom();
+            nomOrganisation = svc.getOrganisation() != null ? svc.getOrganisation().getNom() : "République du Cameroun";
         }
 
         long total = dossiers.size();
@@ -111,13 +140,12 @@ public class ResponsableService {
                 .filter(d -> d.getDemarche() != null)
                 .collect(Collectors.groupingBy(d -> d.getDemarche().getTitre(), Collectors.counting()));
 
-        // Charge des agents du service
-        List<AgentChargeDto> agentsCharge = getAgentsCharge(service != null ? service.getId() : null);
+        List<AgentChargeDto> agentsCharge = getAgentsCharge(requestedServiceId);
 
         return DashboardResponsableDto.builder()
-                .codeService(service != null ? service.getCode() : "TOUS")
-                .nomService(service != null ? service.getNom() : "Tous les services (Vue Super Admin)")
-                .nomOrganisation(service != null && service.getOrganisation() != null ? service.getOrganisation().getNom() : "République du Cameroun")
+                .codeService(codeScope)
+                .nomService(nomScope)
+                .nomOrganisation(nomOrganisation)
                 .totalDossiers(total)
                 .dossiersEnAttente(enAttente)
                 .dossiersEnCours(enCours)
@@ -135,47 +163,95 @@ public class ResponsableService {
     }
 
     /**
-     * Liste des agents avec leur charge de travail.
+     * Liste des agents et sous-responsables avec leur charge de travail.
      */
     @Transactional(readOnly = true)
-    public List<AgentChargeDto> getAgentsCharge(Long serviceId) {
-        List<Utilisateur> agents;
-        if (serviceId != null) {
-            agents = utilisateurRepository.findByServiceId(serviceId);
+    public List<AgentChargeDto> getAgentsCharge(Long requestedServiceId) {
+        Utilisateur responsable = authService.getCurrentUser();
+        List<Utilisateur> membres;
+
+        if (responsable.getRole() == Role.ROLE_RESPONSABLE) {
+            Organisation ownOrg = personnelHierarchyHelper.requireUserOrganisation(responsable);
+            if (requestedServiceId != null) {
+                ServiceAdministratif svc = personnelHierarchyHelper.requireService(
+                        requestedServiceId, "Service administratif introuvable avec l'ID : " + requestedServiceId);
+                if (svc.getOrganisation() == null || !ownOrg.getId().equals(svc.getOrganisation().getId())) {
+                    throw BusinessException.forbidden("Accès refusé : ce service n'appartient pas à votre organisation.");
+                }
+                membres = utilisateurRepository.findByServiceId(svc.getId());
+            } else {
+                membres = utilisateurRepository.findByServiceOrganisationId(ownOrg.getId());
+            }
         } else {
-            agents = utilisateurRepository.findByRole(Role.ROLE_AGENT);
+            ServiceAdministratif ownService = personnelHierarchyHelper.requireUserService(responsable);
+            if (requestedServiceId != null && !requestedServiceId.equals(ownService.getId())) {
+                throw BusinessException.forbidden("Accès refusé : vous ne pouvez consulter que les agents de votre propre service.");
+            }
+            membres = utilisateurRepository.findByServiceId(ownService.getId());
         }
 
-        return agents.stream().map(agent -> {
-            long enCours = historiqueRepository.countByAgentIdAndNouveauStatut(agent.getId(), StatutDossier.EN_VERIFICATION);
-            long totalTraite = historiqueRepository.countByAgentId(agent.getId());
+        return membres.stream()
+                .filter(u -> u.getRole() == Role.ROLE_AGENT || u.getRole() == Role.ROLE_SOUS_RESPONSABLE)
+                .sorted(Comparator
+                        .comparing((Utilisateur u) -> u.getService() != null ? u.getService().getNom() : "")
+                        .thenComparing(u -> u.getRole() == Role.ROLE_SOUS_RESPONSABLE ? 0 : 1)
+                        .thenComparing(Utilisateur::getNom))
+                .map(agent -> {
+                    long enCours = historiqueRepository.countByAgentIdAndNouveauStatut(agent.getId(), StatutDossier.EN_VERIFICATION);
+                    long totalTraite = historiqueRepository.countByAgentId(agent.getId());
 
-            return AgentChargeDto.builder()
-                    .agentId(agent.getId())
-                    .nomComplet(agent.getPrenom() + " " + agent.getNom())
-                    .email(agent.getEmail())
-                    .telephone(agent.getTelephone())
-                    .dossiersEnCours(enCours)
-                    .dossiersTraitesTotal(totalTraite)
-                    .actif(Boolean.TRUE.equals(agent.getActif()))
-                    .build();
-        }).collect(Collectors.toList());
+                    return AgentChargeDto.builder()
+                            .agentId(agent.getId())
+                            .nomComplet(agent.getPrenom() + " " + agent.getNom())
+                            .email(agent.getEmail())
+                            .telephone(agent.getTelephone())
+                            .role(agent.getRole().name())
+                            .serviceId(agent.getService() != null ? agent.getService().getId() : null)
+                            .serviceNom(agent.getService() != null ? agent.getService().getNom() : null)
+                            .dossiersEnCours(enCours)
+                            .dossiersTraitesTotal(totalTraite)
+                            .actif(Boolean.TRUE.equals(agent.getActif()))
+                            .build();
+                })
+                .collect(Collectors.toList());
     }
 
     /**
-     * Réassigne un dossier à un agent spécifique du service (décision du responsable).
+     * Retourne les services du périmètre de supervision.
+     */
+    @Transactional(readOnly = true)
+    public List<ServiceAdminDto> getServicesPerimetre() {
+        Utilisateur current = authService.getCurrentUser();
+        if (current.getRole() == Role.ROLE_RESPONSABLE) {
+            Organisation ownOrg = personnelHierarchyHelper.requireUserOrganisation(current);
+            return serviceRepository.findByOrganisationId(ownOrg.getId()).stream()
+                    .map(personnelHierarchyHelper::toServiceAdminDto)
+                    .collect(Collectors.toList());
+        }
+        ServiceAdministratif ownService = personnelHierarchyHelper.requireUserService(current);
+        return List.of(personnelHierarchyHelper.toServiceAdminDto(ownService));
+    }
+
+    /**
+     * Réassigne un dossier à un agent ou sous-responsable du service détenteur.
      */
     @Transactional
     public DossierResponseDto reassignerDossier(String numeroSuivi, ReassignationDossierRequest request) {
         Utilisateur responsable = authService.getCurrentUser();
         Dossier dossier = dossierRepository.findByNumeroSuivi(numeroSuivi)
                 .orElseThrow(() -> BusinessException.notFound("Dossier introuvable : " + numeroSuivi));
+        personnelHierarchyHelper.verifyDossierAccess(responsable, dossier);
 
         Utilisateur agentCible = utilisateurRepository.findById(request.getAgentId())
                 .orElseThrow(() -> BusinessException.notFound("Agent cible introuvable : " + request.getAgentId()));
 
-        if (agentCible.getRole() != Role.ROLE_AGENT && agentCible.getRole() != Role.ROLE_RESPONSABLE) {
-            throw BusinessException.badRequest("L'utilisateur cible n'a pas le profil agent ou responsable.");
+        if (agentCible.getRole() != Role.ROLE_AGENT && agentCible.getRole() != Role.ROLE_SOUS_RESPONSABLE) {
+            throw BusinessException.badRequest("L'utilisateur cible doit être un agent ou un sous-responsable.");
+        }
+        if (dossier.getServiceCourant() == null
+                || agentCible.getService() == null
+                || !dossier.getServiceCourant().getId().equals(agentCible.getService().getId())) {
+            throw BusinessException.forbidden("Vous ne pouvez réassigner ce dossier qu'à un agent ou sous-responsable du service détenteur.");
         }
 
         StatutDossier ancienStatut = dossier.getStatut();
@@ -183,7 +259,7 @@ public class ResponsableService {
         dossier.setUpdatedAt(Instant.now());
         Dossier saved = dossierRepository.save(dossier);
 
-        String note = request.getNoteResponsable() != null ? request.getNoteResponsable() : "Réassignation par le responsable";
+        String note = request.getNoteResponsable() != null ? request.getNoteResponsable() : "Réassignation par la supervision";
 
         // Notification des observateurs (Pattern Observer)
         dossierSubject.notifyObservers(DossierEvent.of(
@@ -197,13 +273,14 @@ public class ResponsableService {
     }
 
     /**
-     * Validation hiérarchique de second niveau par le Responsable.
+     * Validation hiérarchique de second niveau par le Responsable ou Sous-Responsable.
      */
     @Transactional
     public DossierResponseDto validerHierarchique(String numeroSuivi, DecisionDossierRequest request) {
         Utilisateur responsable = authService.getCurrentUser();
         Dossier dossier = dossierRepository.findByNumeroSuiviWithPiecesAndDemarche(numeroSuivi)
                 .orElseThrow(() -> BusinessException.notFound("Dossier introuvable : " + numeroSuivi));
+        personnelHierarchyHelper.verifyDossierAccess(responsable, dossier);
 
         StatutDossier ancienStatut = dossier.getStatut();
 
@@ -237,5 +314,100 @@ public class ResponsableService {
         ));
 
         return citoyenService.toDto(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public List<UtilisateurAdminDto> getEquipeOrganisation() {
+        Utilisateur responsable = requireOrganisationResponsable();
+        Organisation org = personnelHierarchyHelper.requireUserOrganisation(responsable);
+
+        return utilisateurRepository.findByServiceOrganisationId(org.getId()).stream()
+                .filter(u -> u.getRole() == Role.ROLE_AGENT || u.getRole() == Role.ROLE_SOUS_RESPONSABLE)
+                .map(UtilisateurAdminDto::fromEntity)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public UtilisateurAdminDto createMembreEquipe(CreateUserAdminRequest request) {
+        Utilisateur responsable = requireOrganisationResponsable();
+        Organisation org = personnelHierarchyHelper.requireUserOrganisation(responsable);
+        Role requestedRole = validateServiceStaffRole(request.getRole());
+
+        ServiceAdministratif svc = requireOrgOwnedService(org, request.getServiceId());
+        CreateUserAdminRequest scopedRequest = CreateUserAdminRequest.builder()
+                .email(request.getEmail())
+                .nom(request.getNom())
+                .prenom(request.getPrenom())
+                .telephone(request.getTelephone())
+                .motDePasse(request.getMotDePasse())
+                .role(requestedRole)
+                .serviceId(svc.getId())
+                .organisationId(null)
+                .build();
+
+        return personnelHierarchyHelper.createInternalUser(scopedRequest);
+    }
+
+    @Transactional
+    public UtilisateurAdminDto updateMembreEquipe(Long targetUserId, UpdateUserAdminRequest request) {
+        Utilisateur responsable = requireOrganisationResponsable();
+        Organisation org = personnelHierarchyHelper.requireUserOrganisation(responsable);
+        Utilisateur target = requireManagedOrgStaff(targetUserId, org);
+
+        Role targetRole = validateServiceStaffRole(request.getRole() != null ? request.getRole() : target.getRole());
+        Long targetServiceId = request.getServiceId() != null
+                ? requireOrgOwnedService(org, request.getServiceId()).getId()
+                : (target.getService() != null ? target.getService().getId() : null);
+
+        return personnelHierarchyHelper.applyUserUpdate(
+                target, targetRole, null, targetServiceId, request.getActif()
+        );
+    }
+
+    @Transactional
+    public UtilisateurAdminDto toggleMembreEquipeActif(Long targetUserId) {
+        Utilisateur responsable = requireOrganisationResponsable();
+        Organisation org = personnelHierarchyHelper.requireUserOrganisation(responsable);
+        Utilisateur target = requireManagedOrgStaff(targetUserId, org);
+
+        target.setActif(!Boolean.TRUE.equals(target.getActif()));
+        return UtilisateurAdminDto.fromEntity(utilisateurRepository.save(target));
+    }
+
+    private Utilisateur requireOrganisationResponsable() {
+        Utilisateur current = authService.getCurrentUser();
+        if (current.getRole() != Role.ROLE_RESPONSABLE) {
+            throw BusinessException.forbidden("Seul le Responsable de l'organisation peut gérer l'équipe et les affectations.");
+        }
+        return current;
+    }
+
+    private Role validateServiceStaffRole(Role role) {
+        if (role != Role.ROLE_AGENT && role != Role.ROLE_SOUS_RESPONSABLE) {
+            throw BusinessException.forbidden("Vous ne pouvez attribuer que les rôles Agent Instructeur ou Sous-Responsable de Service.");
+        }
+        return role;
+    }
+
+    private ServiceAdministratif requireOrgOwnedService(Organisation org, Long serviceId) {
+        ServiceAdministratif svc = personnelHierarchyHelper.requireService(
+                serviceId, "Le service administratif cible est obligatoire."
+        );
+        if (svc.getOrganisation() == null || !org.getId().equals(svc.getOrganisation().getId())) {
+            throw BusinessException.forbidden("Accès refusé : ce service n'appartient pas à votre organisation.");
+        }
+        return svc;
+    }
+
+    private Utilisateur requireManagedOrgStaff(Long userId, Organisation org) {
+        Utilisateur target = utilisateurRepository.findById(userId)
+                .orElseThrow(() -> BusinessException.notFound("Membre d'équipe introuvable : " + userId));
+        if ((target.getRole() != Role.ROLE_AGENT && target.getRole() != Role.ROLE_SOUS_RESPONSABLE)
+                || target.getService() == null
+                || target.getService().getOrganisation() == null
+                || !org.getId().equals(target.getService().getOrganisation().getId())) {
+            throw BusinessException.forbidden("Accès refusé : cet utilisateur n'appartient pas aux services de votre organisation.");
+        }
+        return target;
     }
 }

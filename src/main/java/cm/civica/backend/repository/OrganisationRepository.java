@@ -11,4 +11,6 @@ import java.util.Optional;
 public interface OrganisationRepository extends JpaRepository<Organisation, Long> {
     Optional<Organisation> findByCode(String code);
     List<Organisation> findByActifTrue();
+    boolean existsByTypeOrganisationIgnoreCase(String typeOrganisation);
+    long countByTypeOrganisationIgnoreCase(String typeOrganisation);
 }

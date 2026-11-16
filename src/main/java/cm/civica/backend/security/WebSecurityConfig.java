@@ -100,6 +100,10 @@ public class WebSecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/demarches/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/organisations/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/citoyen/dossiers/suivi/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/finance/baremes/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/finance/dossiers/*/resume").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/ia/status").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/ia/chat", "/api/ia/precheck-completude").permitAll()
                         .requestMatchers(
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
@@ -112,8 +116,8 @@ public class WebSecurityConfig {
                         ).permitAll()
                         .requestMatchers("/uploads/**").permitAll()
                         .requestMatchers("/api/admin/**").hasAuthority("ROLE_SUPER_ADMIN")
-                        .requestMatchers("/api/agent/**").hasAnyAuthority("ROLE_AGENT", "ROLE_RESPONSABLE", "ROLE_SUPER_ADMIN")
-                        .requestMatchers("/api/responsable/**").hasAnyAuthority("ROLE_RESPONSABLE", "ROLE_SUPER_ADMIN")
+                        .requestMatchers("/api/agent/**").hasAnyAuthority("ROLE_AGENT", "ROLE_SOUS_RESPONSABLE", "ROLE_RESPONSABLE")
+                        .requestMatchers("/api/responsable/**").hasAnyAuthority("ROLE_SOUS_RESPONSABLE", "ROLE_RESPONSABLE")
                         .requestMatchers("/api/citoyen/**").authenticated()
                         .anyRequest().authenticated()
                 );

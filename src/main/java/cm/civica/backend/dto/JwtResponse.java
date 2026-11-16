@@ -21,5 +21,7 @@ public class JwtResponse {
     private String role;
     private Long serviceId;
     private String serviceNom;
+    private Long organisationId;
+    private String organisationNom;
 }
 

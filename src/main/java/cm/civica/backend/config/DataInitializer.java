@@ -17,6 +17,7 @@ public class DataInitializer {
 
     @Bean
     public CommandLineRunner initDefaultData(
+            OrganisationTypeRepository organisationTypeRepo,
             OrganisationRepository organisationRepo,
             ServiceAdministratifRepository serviceRepo,
             DemarcheRepository demarcheRepo,
@@ -24,6 +25,18 @@ public class DataInitializer {
             PasswordEncoder passwordEncoder) {
 
         return args -> {
+            // 0. Initialisation idempotente des Types d'Organisations par défaut
+            seedOrganisationTypeIfMissing(organisationTypeRepo, "MINISTERE", "Ministère",
+                    "Départements ministériels de l'État.");
+            seedOrganisationTypeIfMissing(organisationTypeRepo, "POLICE_ETAT", "Police d'État / Sûreté Nationale",
+                    "Services de sécurité nationale et délivrance des titres d'identité.");
+            seedOrganisationTypeIfMissing(organisationTypeRepo, "COLLECTIVITE_TERRITORIALE", "Collectivité Territoriale / Mairie",
+                    "Communes, mairies d'arrondissement et conseils régionaux.");
+            seedOrganisationTypeIfMissing(organisationTypeRepo, "JUSTICE", "Juridiction / Tribunal",
+                    "Cours, tribunaux, parquets et greffes judiciaires.");
+            seedOrganisationTypeIfMissing(organisationTypeRepo, "AUTRE", "Autre institution",
+                    "Établissement public, agence ou autre structure administrative.");
+
             // 1. Initialisation des Organisations & Services
             if (organisationRepo.count() == 0) {
                 log.info(">>> [DATA INITIALIZER] Seeding des organisations et services de référence...");
@@ -131,7 +144,7 @@ public class DataInitializer {
                             .emailVerifie(true) // compte système — pas de vérification requise
                             .build());
 
-                    // Responsable État Civil
+                    // Responsable Organisation : Mairie de Yaoundé 1er (supervise tous les services de l'organisation)
                     utilisateurRepo.save(Utilisateur.builder()
                             .email("responsable.etatcivil@civica.cm")
                             .motDePasseHash(passwordEncoder.encode("Resp@Civica2026!"))
@@ -139,6 +152,19 @@ public class DataInitializer {
                             .prenom("Marie-Claire")
                             .telephone("+237699334455")
                             .role(Role.ROLE_RESPONSABLE)
+                            .organisation(mairieYde1)
+                            .actif(true)
+                            .emailVerifie(true) // compte système — pas de vérification requise
+                            .build());
+
+                    // Sous-Responsable Service : Bureau Principal de l'État Civil
+                    utilisateurRepo.save(Utilisateur.builder()
+                            .email("sousresponsable.etatcivil@civica.cm")
+                            .motDePasseHash(passwordEncoder.encode("SousResp@Civica2026!"))
+                            .nom("Tchamba")
+                            .prenom("Paul")
+                            .telephone("+237677998877")
+                            .role(Role.ROLE_SOUS_RESPONSABLE)
                             .service(serviceEtatCivil)
                             .actif(true)
                             .emailVerifie(true) // compte système — pas de vérification requise
@@ -160,6 +186,21 @@ public class DataInitializer {
                 log.info(">>> [DATA INITIALIZER] Initialisation terminée avec succès !");
             }
         };
+    }
+
+    private void seedOrganisationTypeIfMissing(
+            OrganisationTypeRepository repo,
+            String code,
+            String libelle,
+            String description) {
+        if (!repo.existsByCodeIgnoreCase(code)) {
+            repo.save(OrganisationType.builder()
+                    .code(code)
+                    .libelle(libelle)
+                    .description(description)
+                    .actif(true)
+                    .build());
+        }
     }
 }
 

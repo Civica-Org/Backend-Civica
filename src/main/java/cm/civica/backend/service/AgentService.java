@@ -20,6 +20,7 @@ import cm.civica.backend.repository.DossierRepository;
 import cm.civica.backend.repository.HistoriqueDossierRepository;
 import cm.civica.backend.repository.ServiceAdministratifRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -64,24 +65,22 @@ public class AgentService {
     @Autowired
     private DossierSubject dossierSubject;
 
+    @Autowired
+    private PersonnelHierarchyHelper personnelHierarchyHelper;
+
+    @Lazy
+    @Autowired(required = false)
+    private CivicaIaService civicaIaService;
+
     @Transactional(readOnly = true)
     public List<DossierResponseDto> getDossiersAInstructionner(StatutDossier statut) {
-        Utilisateur agent = authService.getCurrentUser();
+        return getDossiersAInstructionner(statut, null);
+    }
 
-        List<Dossier> dossiers;
-        if (agent.getService() != null) {
-            if (statut != null) {
-                dossiers = dossierRepository.findByServiceCourantIdAndStatut(agent.getService().getId(), statut);
-            } else {
-                dossiers = dossierRepository.findByServiceCourantId(agent.getService().getId());
-            }
-        } else {
-            if (statut != null) {
-                dossiers = dossierRepository.findByStatut(statut);
-            } else {
-                dossiers = dossierRepository.findAll();
-            }
-        }
+    @Transactional(readOnly = true)
+    public List<DossierResponseDto> getDossiersAInstructionner(StatutDossier statut, Long serviceId) {
+        Utilisateur agent = authService.getCurrentUser();
+        List<Dossier> dossiers = personnelHierarchyHelper.findScopedDossiers(agent, statut, serviceId);
 
         return dossiers.stream()
                 .map(citoyenService::toDto)
@@ -93,6 +92,7 @@ public class AgentService {
         Utilisateur agent = authService.getCurrentUser();
         Dossier dossier = dossierRepository.findByNumeroSuivi(numeroSuivi)
                 .orElseThrow(() -> BusinessException.notFound("Dossier introuvable : " + numeroSuivi));
+        verifyDossierScope(agent, dossier);
 
         StatutDossier ancienStatut = dossier.getStatut();
 
@@ -116,6 +116,7 @@ public class AgentService {
         Utilisateur agent = authService.getCurrentUser();
         Dossier dossier = dossierRepository.findByNumeroSuiviWithPiecesAndDemarche(numeroSuivi)
                 .orElseThrow(() -> BusinessException.notFound("Dossier introuvable : " + numeroSuivi));
+        verifyDossierScope(agent, dossier);
 
         StatutDossier ancienStatut = dossier.getStatut();
 
@@ -145,6 +146,10 @@ public class AgentService {
                 agent, dossier.getServiceCourant()
         ));
 
+        if (civicaIaService != null) {
+            civicaIaService.linkFinalDecisionValidator(saved, agent);
+        }
+
         return citoyenService.toDto(saved);
     }
 
@@ -153,11 +158,18 @@ public class AgentService {
         Utilisateur agent = authService.getCurrentUser();
         Dossier dossier = dossierRepository.findByNumeroSuivi(numeroSuivi)
                 .orElseThrow(() -> BusinessException.notFound("Dossier introuvable : " + numeroSuivi));
+        verifyDossierScope(agent, dossier);
 
         ServiceAdministratif cible = serviceRepository.findById(request.getServiceCibleId())
                 .orElseThrow(() -> BusinessException.notFound("Service cible introuvable avec l'ID : " + request.getServiceCibleId()));
 
-        ServiceAdministratif source = dossier.getServiceCourant();
+        if (!Boolean.TRUE.equals(cible.getActif())) {
+            throw BusinessException.badRequest("Impossible de transférer vers un service désactivé : " + cible.getNom());
+        }
+        if (dossier.getServiceCourant() != null && cible.getId().equals(dossier.getServiceCourant().getId())) {
+            throw BusinessException.badRequest("Le dossier est déjà rattaché au service : " + cible.getNom());
+        }
+
         StatutDossier ancienStatut = dossier.getStatut();
 
         // Pattern State + Invariant Alloy : transfert atomique
@@ -178,21 +190,34 @@ public class AgentService {
         return citoyenService.toDto(saved);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AuditCompletudeDto auditerDossierParIa(String numeroSuivi) {
+        Utilisateur agent = authService.getCurrentUser();
         Dossier dossier = dossierRepository.findByNumeroSuiviWithPiecesAndDemarche(numeroSuivi)
                 .orElseThrow(() -> BusinessException.notFound("Dossier introuvable : " + numeroSuivi));
+        verifyDossierScope(agent, dossier);
 
-        // Pattern Adapter : appel du service d'audit LLM
+        // Pattern Adapter + traçabilité ai_suggestions
+        if (civicaIaService != null) {
+            return civicaIaService.auditerDossierPourAgent(dossier, agent);
+        }
         return llmAuditeurService.auditerDossier(dossier);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public String suggererMotifRejetParIa(String numeroSuivi, String contexte) {
+        Utilisateur agent = authService.getCurrentUser();
         Dossier dossier = dossierRepository.findByNumeroSuiviWithPiecesAndDemarche(numeroSuivi)
                 .orElseThrow(() -> BusinessException.notFound("Dossier introuvable : " + numeroSuivi));
+        verifyDossierScope(agent, dossier);
 
-        // Pattern Adapter : suggestion de motif de rejet
+        if (civicaIaService != null) {
+            return civicaIaService.enregistrerSuggestionRejetAgent(dossier, contexte, agent);
+        }
         return llmAuditeurService.suggererMotifRejet(dossier, contexte);
+    }
+
+    private void verifyDossierScope(Utilisateur agent, Dossier dossier) {
+        personnelHierarchyHelper.verifyDossierAccess(agent, dossier);
     }
 }

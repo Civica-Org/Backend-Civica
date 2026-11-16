@@ -27,7 +27,9 @@ public class NotificationObserver implements DossierObserver {
 
         StatutDossier nouveauStatut = event.getNouveauStatut();
 
-        if (nouveauStatut == StatutDossier.SOUMIS) {
+        if ("PAIEMENT_CONFIRME".equals(event.getAction())) {
+            emailService.sendNotificationChangementStatut(dossier, event.getCommentaire());
+        } else if (nouveauStatut == StatutDossier.SOUMIS) {
             emailService.sendConfirmationDepot(dossier);
         } else if (nouveauStatut == StatutDossier.EN_VERIFICATION) {
             emailService.sendNotificationChangementStatut(dossier, "Votre dossier a été pris en charge pour instruction.");

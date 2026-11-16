@@ -4,9 +4,10 @@ import cm.civica.backend.dto.JwtResponse;
 import cm.civica.backend.dto.LoginRequest;
 import cm.civica.backend.dto.ResendCodeRequest;
 import cm.civica.backend.dto.SignupRequest;
+import cm.civica.backend.dto.UtilisateurAdminDto;
 import cm.civica.backend.dto.VerifyEmailRequest;
-import cm.civica.backend.model.Utilisateur;
 import cm.civica.backend.service.AuthService;
+import cm.civica.backend.service.ProfilService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -27,6 +28,9 @@ public class AuthController {
 
     @Autowired
     private AuthService authService;
+
+    @Autowired
+    private ProfilService profilService;
 
     // ─── CONNEXION ───────────────────────────────────────────────────────────
     @Operation(
@@ -96,8 +100,8 @@ public class AuthController {
     // ─── PROFIL COURANT ───────────────────────────────────────────────────────
     @Operation(summary = "Profil utilisateur courant", description = "Retourne les informations du compte actuellement authentifié.")
     @GetMapping("/me")
-    public ResponseEntity<Utilisateur> getCurrentUserProfile() {
-        return ResponseEntity.ok(authService.getCurrentUser());
+    public ResponseEntity<UtilisateurAdminDto> getCurrentUserProfile() {
+        return ResponseEntity.ok(profilService.getProfil());
     }
 }
 

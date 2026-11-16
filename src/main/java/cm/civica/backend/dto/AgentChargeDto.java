@@ -18,6 +18,9 @@ public class AgentChargeDto {
     private String nomComplet;
     private String email;
     private String telephone;
+    private String role;
+    private Long serviceId;
+    private String serviceNom;
     private long dossiersEnCours;
     private long dossiersTraitesTotal;
     private boolean actif;

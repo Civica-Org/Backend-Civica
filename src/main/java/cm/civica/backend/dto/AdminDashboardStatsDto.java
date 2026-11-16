@@ -13,13 +13,16 @@ import java.util.Map;
 @AllArgsConstructor
 public class AdminDashboardStatsDto {
     private long totalOrganisations;
+    private long organisationsActives;
     private long totalServices;
+    private long servicesActifs;
     private long totalDemarches;
+    private long demarchesActives;
     private long totalUtilisateurs;
     private long totalCitoyens;
     private long totalAgents;
+    private long totalSousResponsables;
     private long totalResponsables;
-    private long totalDossiers;
-    private Map<String, Long> dossiersParStatut;
-    private Map<String, Long> dossiersParOrganisation;
+    private Map<String, Long> organisationsParType;
+    private Map<String, Long> servicesParOrganisation;
 }

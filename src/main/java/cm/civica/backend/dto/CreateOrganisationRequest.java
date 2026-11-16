@@ -1,5 +1,6 @@
 package cm.civica.backend.dto;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,4 +20,7 @@ public class CreateOrganisationRequest {
 
     @NotBlank(message = "Le type d'organisation est obligatoire")
     private String typeOrganisation;
+
+    @Email(message = "L'adresse email du responsable est invalide")
+    private String responsableEmail;
 }

@@ -1,7 +1,10 @@
 package cm.civica.backend.service;
 
 import cm.civica.backend.model.Dossier;
+import cm.civica.backend.model.Organisation;
+import cm.civica.backend.model.OrganisationType;
 import cm.civica.backend.model.Utilisateur;
+import cm.civica.backend.repository.OrganisationTypeRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
@@ -12,6 +15,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.web.util.HtmlUtils;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -30,6 +34,9 @@ public class EmailService {
 
     @Autowired(required = false)
     private JavaMailSender mailSender;
+
+    @Autowired(required = false)
+    private OrganisationTypeRepository organisationTypeRepository;
 
     @Value("${spring.mail.username:civika.contact@gmail.com}")
     private String fromEmail;
@@ -187,6 +194,83 @@ public class EmailService {
         content.append("<p>Pour consulter l'historique complet et les éventuelles pièces réclamées :</p>");
 
         sendHtmlEmail(toEmail, subject, "Mise à jour de statut de votre démarche.", content.toString(), "Consulter mon dossier", lienSuivi);
+    }
+
+    /**
+     * 5. Notification au responsable désigné lors de la création d'une organisation.
+     */
+    @Async
+    public void sendOrganisationResponsableNotification(Utilisateur responsable, Organisation organisation) {
+        if (responsable == null || responsable.getEmail() == null || organisation == null) {
+            return;
+        }
+
+        String toEmail = responsable.getEmail();
+        String fullName = escapeHtml((responsable.getPrenom() != null ? responsable.getPrenom() : "")
+                + " " + (responsable.getNom() != null ? responsable.getNom() : "")).trim();
+        String orgNom = escapeHtml(organisation.getNom());
+        String orgCode = escapeHtml(organisation.getCode());
+        String orgType = escapeHtml(formatOrganisationTypeLabel(organisation.getTypeOrganisation()));
+        String lienEspace = frontendUrl + "/responsable/dashboard";
+
+        log.info("🏛️ [ORG RESPONSABLE CIVICA] Notification de nomination envoyée à {} pour l'organisation {} ({})",
+                toEmail, organisation.getNom(), organisation.getCode());
+
+        String subject = "CIVICA — Vous êtes désigné Responsable de l'organisation « " + organisation.getNom() + " »";
+
+        String content = "<p>Bonjour <strong>" + fullName + "</strong>,</p>"
+                + "<p>L'Administrateur Principal de la plateforme <strong>CIVICA</strong> vient de créer une nouvelle organisation administrative et de vous nommer en qualité de <strong>Responsable d'Organisation</strong>.</p>"
+                + "<div style='background-color: #f8fafc; border-left: 4px solid #1e3a8a; padding: 16px; border-radius: 8px; margin: 20px 0;'>"
+                + "  <p style='margin: 0 0 8px 0; font-size: 16px; font-weight: bold; color: #0f172a;'>" + orgNom + "</p>"
+                + "  <p style='margin: 0 0 4px 0; font-size: 13px; color: #475569;'><strong>Code officiel :</strong> <span style='font-family: monospace; color: #1e3a8a;'>" + orgCode + "</span></p>"
+                + "  <p style='margin: 0 0 4px 0; font-size: 13px; color: #475569;'><strong>Type d'institution :</strong> " + orgType + "</p>"
+                + "  <p style='margin: 0 0 4px 0; font-size: 13px; color: #475569;'><strong>Rôle attribué :</strong> Responsable d'Organisation (<span style='font-family: monospace;'>ROLE_RESPONSABLE</span>)</p>"
+                + "  <p style='margin: 0; font-size: 13px; color: #475569;'><strong>Compte CIVICA rattaché :</strong> " + escapeHtml(toEmail) + "</p>"
+                + "</div>"
+                + "<p>Depuis votre espace de supervision, vous pouvez désormais :</p>"
+                + "<ul style='margin: 12px 0; padding-left: 20px; color: #334155;'>"
+                + "  <li>Gérer les services administratifs et constituer vos équipes (agents instructeurs et sous-responsables) ;</li>"
+                + "  <li>Superviser l'instruction et la validation des dossiers rattachés à votre organisation ;</li>"
+                + "  <li>Consulter les recettes et initier les opérations financières du portefeuille de votre organisation.</li>"
+                + "</ul>"
+                + "<p>Reconnectez-vous avec vos identifiants CIVICA habituels si une session précédente était ouverte afin d'activer vos nouveaux droits.</p>";
+
+        sendHtmlEmail(
+                toEmail,
+                subject,
+                "Nomination en tant que Responsable de " + organisation.getNom(),
+                content,
+                "Accéder à mon espace Responsable",
+                lienEspace
+        );
+    }
+
+    private String escapeHtml(String value) {
+        return value != null ? HtmlUtils.htmlEscape(value) : "";
+    }
+
+    private String formatOrganisationTypeLabel(String typeCode) {
+        if (typeCode == null) return "Organisation publique";
+        if (organisationTypeRepository != null) {
+            try {
+                String dbLabel = organisationTypeRepository.findByCodeIgnoreCase(typeCode.trim())
+                        .map(OrganisationType::getLibelle)
+                        .orElse(null);
+                if (dbLabel != null && !dbLabel.isBlank()) {
+                    return dbLabel;
+                }
+            } catch (Exception ignored) {
+                // Fallback sur les libellés standards
+            }
+        }
+        return switch (typeCode.trim().toUpperCase()) {
+            case "MINISTERE" -> "Ministère";
+            case "POLICE_ETAT" -> "Police d'État / Sûreté Nationale";
+            case "COLLECTIVITE_TERRITORIALE" -> "Collectivité Territoriale / Mairie";
+            case "JUSTICE" -> "Juridiction / Tribunal";
+            case "AUTRE" -> "Autre institution";
+            default -> typeCode;
+        };
     }
 
     private void sendHtmlEmail(String to, String subject, String preheader, String contentHtml, String ctaText, String ctaUrl) {

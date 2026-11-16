@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 public class AuthService {
@@ -189,6 +190,8 @@ public class AuthService {
                 .role(userDetails.getRole())
                 .serviceId(userDetails.getServiceId())
                 .serviceNom(userDetails.getServiceNom())
+                .organisationId(userDetails.getOrganisationId())
+                .organisationNom(userDetails.getOrganisationNom())
                 .build();
     }
 
@@ -203,6 +206,14 @@ public class AuthService {
         String email = auth.getName();
         return utilisateurRepository.findByEmail(email)
                 .orElseThrow(() -> BusinessException.notFound("Utilisateur courant introuvable."));
+    }
+
+    public Optional<Utilisateur> getCurrentUserOptional() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+            return Optional.empty();
+        }
+        return utilisateurRepository.findByEmail(auth.getName());
     }
 
     private String genererOtp() {

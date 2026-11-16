@@ -10,6 +10,7 @@ import java.util.Optional;
 @Repository
 public interface ServiceAdministratifRepository extends JpaRepository<ServiceAdministratif, Long> {
     List<ServiceAdministratif> findByOrganisationId(Long organisationId);
+    List<ServiceAdministratif> findByOrganisationIdAndActifTrue(Long organisationId);
     Optional<ServiceAdministratif> findByOrganisationIdAndCode(Long organisationId, String code);
     List<ServiceAdministratif> findByActifTrue();
 }

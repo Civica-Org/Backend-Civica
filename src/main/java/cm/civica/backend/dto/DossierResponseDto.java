@@ -1,5 +1,6 @@
 package cm.civica.backend.dto;
 
+import cm.civica.backend.dto.finance.PaiementDto;
 import cm.civica.backend.enums.StatutDossier;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -32,6 +33,12 @@ public class DossierResponseDto {
     private String motifRejet;
     private Instant createdAt;
     private Instant updatedAt;
+
+    /** Indique si les droits légaux du dossier ont été acquittés et quittancés. */
+    private boolean paye;
+
+    /** Détails complets du paiement confirmé (quittance, moyen de paiement, répartition) s'il existe. */
+    private PaiementDto paiementConfirme;
 
     @Builder.Default
     private List<PieceJustificativeDto> pieces = new ArrayList<>();
